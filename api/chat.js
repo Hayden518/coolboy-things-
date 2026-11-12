@@ -8,7 +8,7 @@ export default async function handler(req, res) {
 
     if (!apiKey) {
       return res.status(500).json({
-        error: "Gemini API key is missing from Vercel."
+        error: "Missing GEMINI_API_KEY in Vercel."
       });
     }
 
@@ -16,36 +16,45 @@ export default async function handler(req, res) {
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({
-        error: "Please send a message."
+        error: "Please enter a message."
       });
     }
 
-    const contents = messages.map((message, index) => {
-      const parts = [{ text: String(message.content || "") }];
+    const contents = messages
+      .filter(m => m && ["user", "assistant"].includes(m.role))
+      .map(m => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: String(m.content || "") }]
+      }));
 
-      if (index === messages.length - 1 && image) {
-        const match = String(image).match(
-          /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/
-        );
+    // Add an uploaded image to the latest user message
+    if (image) {
+      const match = String(image).match(
+        /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+      );
 
-        if (match) {
-          parts.push({
-            inlineData: {
-              mimeType: match[1],
-              data: match[2]
-            }
-          });
-        }
+      if (!match) {
+        return res.status(400).json({
+          error: "Please upload a JPG, PNG, or WEBP image."
+        });
       }
 
-      return {
-        role: message.role === "assistant" ? "model" : "user",
-        parts
-      };
-    });
+      const latestUser = [...contents]
+        .reverse()
+        .find(m => m.role === "user");
+
+      if (latestUser) {
+        latestUser.parts.push({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2]
+          }
+        });
+      }
+    }
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
       {
         method: "POST",
         headers: {
@@ -65,9 +74,14 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini API error:", data);
+      console.error("Gemini error:", data);
+
       return res.status(502).json({
-        error: "Gemini could not answer. Check the API setup and usage limits."
+        error: response.status === 503
+          ? "Gemini is busy right now. Please try again shortly."
+          : response.status === 429
+          ? "The free usage limit has been reached. Try again later."
+          : "Gemini request failed. Check the API key and model access."
       });
     }
 
@@ -78,16 +92,17 @@ export default async function handler(req, res) {
 
     if (!reply) {
       return res.status(502).json({
-        error: "Gemini returned an empty response."
+        error: "Gemini did not return a response. Please try again."
       });
     }
 
     return res.status(200).json({ reply });
 
   } catch (error) {
-    console.error("Chat error:", error);
+    console.error("Server error:", error);
+
     return res.status(500).json({
-      error: "Something went wrong on the server."
+      error: "Something went wrong. Please try again."
     });
   }
 }
