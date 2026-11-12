@@ -3,54 +3,61 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const key = process.env.OPENAI_API_KEY;
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!key) {
-    return res.status(500).json({ error: "API key is missing" });
-  }
-
-  const messages = req.body?.messages || [];
-  const image = req.body?.image;
-
-  const lastIndex = messages.length - 1;
-
-  const input = messages.slice(-12).map((m, i) => {
-    const content = [{
-      type: "input_text",
-      text: String(m.content).slice(0, 4000)
-    }];
-
-    if (
-      i === Math.min(lastIndex, 11) &&
-      image &&
-      /^data:image\/(jpeg|png|webp);base64,/.test(image)
-    ) {
-      content.push({
-        type: "input_image",
-        image_url: image
+    if (!apiKey) {
+      return res.status(500).json({
+        error: "Gemini API key is missing from Vercel."
       });
     }
 
-    return {
-      role: m.role === "assistant" ? "assistant" : "user",
-      content
-    };
-  });
+    const { messages = [], image = null } = req.body || {};
 
-  try {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        error: "Please send a message."
+      });
+    }
+
+    const contents = messages.map((message, index) => {
+      const parts = [{ text: String(message.content || "") }];
+
+      if (index === messages.length - 1 && image) {
+        const match = String(image).match(
+          /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/
+        );
+
+        if (match) {
+          parts.push({
+            inlineData: {
+              mimeType: match[1],
+              data: match[2]
+            }
+          });
+        }
+      }
+
+      return {
+        role: message.role === "assistant" ? "model" : "user",
+        parts
+      };
+    });
+
     const response = await fetch(
-      "https://api.openai.com/v1/responses",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${key}`
+          "x-goog-api-key": apiKey
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          instructions: "You are a helpful AI assistant. Answer questions and analyze uploaded images.",
-          input,
-          max_output_tokens: 1200
+          contents,
+          generationConfig: {
+            maxOutputTokens: 1500,
+            temperature: 0.7
+          }
         })
       }
     );
@@ -58,25 +65,29 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Gemini API error:", data);
       return res.status(502).json({
-        error: "The AI service returned an error."
+        error: "Gemini could not answer. Check the API setup and usage limits."
       });
     }
 
-    const reply = (data.output || [])
-      .filter(x => x.type === "message")
-      .flatMap(x => x.content || [])
-      .filter(x => x.type === "output_text")
-      .map(x => x.text)
-      .join("\n");
+    const reply = data.candidates?.[0]?.content?.parts
+      ?.map(part => part.text || "")
+      .join("")
+      .trim();
 
-    return res.status(200).json({
-      reply: reply || "No answer was generated."
-    });
+    if (!reply) {
+      return res.status(502).json({
+        error: "Gemini returned an empty response."
+      });
+    }
+
+    return res.status(200).json({ reply });
 
   } catch (error) {
+    console.error("Chat error:", error);
     return res.status(500).json({
-      error: "Could not connect to AI."
+      error: "Something went wrong on the server."
     });
   }
 }
