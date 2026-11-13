@@ -1,368 +1,292 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My AI</title>
-
-<style>
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: #212121;
-  color: white;
-  font-family: Arial, sans-serif;
-  height: 100vh;
-  display: flex;
-}
-
-.sidebar {
-  width: 230px;
-  background: #171717;
-  padding: 20px;
-}
-
-.sidebar button {
-  width: 100%;
-  padding: 13px;
-  background: #303030;
-  color: white;
-  border: 1px solid #555;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-header {
-  padding: 20px;
-  border-bottom: 1px solid #444;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-#chat {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  width: 100%;
-  max-width: 850px;
-  margin: auto;
-}
-
-.welcome {
-  text-align: center;
-  margin-top: 18vh;
-}
-
-.welcome h1 {
-  font-size: 32px;
-}
-
-.message {
-  padding: 15px;
-  margin: 12px 0;
-  border-radius: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.user {
-  background: #343434;
-}
-
-.ai {
-  background: #292929;
-}
-
-.message img {
-  display: block;
-  max-width: 230px;
-  max-height: 230px;
-  margin-top: 10px;
-  border-radius: 10px;
-}
-
-.input-area {
-  width: 100%;
-  max-width: 850px;
-  margin: auto;
-  padding: 16px;
-}
-
-.input-box {
-  background: #303030;
-  border: 1px solid #555;
-  border-radius: 16px;
-  padding: 12px;
-}
-
-textarea {
-  width: 100%;
-  background: transparent;
-  color: white;
-  border: none;
-  outline: none;
-  resize: vertical;
-  padding: 10px;
-  font-size: 16px;
-}
-
-.controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.controls button {
-  padding: 12px 16px;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-#upload {
-  background: #444;
-  color: white;
-}
-
-#send {
-  background: white;
-  color: black;
-  font-weight: bold;
-}
-
-#preview {
-  display: none;
-  max-width: 100px;
-  max-height: 100px;
-  margin: 8px;
-  border-radius: 8px;
-}
-
-.small {
-  text-align: center;
-  color: #999;
-  font-size: 12px;
-  margin-top: 10px;
-}
-
-@media(max-width:600px) {
-  .sidebar {
-    display: none;
-  }
-  #chat {
-    padding: 12px;
-  }
-}
-</style>
-</head>
-
-<body>
-
-<aside class="sidebar">
-  <h2>My AI</h2>
-  <button onclick="newChat()">+ New Chat</button>
-</aside>
-
-<main class="main">
-
-<header>My AI Assistant</header>
-
-<section id="chat">
-  <div class="welcome" id="welcome">
-    <h1>How can I help you?</h1>
-    <p>Ask me anything or upload a picture.</p>
-  </div>
-</section>
-
-<div class="input-area">
-  <div class="input-box">
-
-    <img id="preview" alt="Image preview">
-
-    <textarea id="prompt"
-      placeholder="Message My AI..."
-      rows="2"></textarea>
-
-    <div class="controls">
-
-      <div>
-        <button id="upload"
-          onclick="document.getElementById('file').click()">
-          + Image
-        </button>
-
-        <input
-          id="file"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          hidden
-          onchange="selectImage(event)">
-      </div>
-
-      <button id="send" onclick="sendMessage()">
-        Send
-      </button>
-
-    </div>
-  </div>
-
-  <div class="small">
-    My AI can make mistakes. Check important information.
-  </div>
-</div>
-
-</main>
-
-<script>
-const chat = document.getElementById("chat");
-const promptBox = document.getElementById("prompt");
-const fileBox = document.getElementById("file");
-const preview = document.getElementById("preview");
-
-let messages = [];
-let selectedImage = null;
-let busy = false;
-
-// ADD YOUR VERCEL BACKEND ADDRESS HERE LATER.
-const API_URL = "";
-
-function addMessage(text, type, image) {
-  document.getElementById("welcome")?.remove();
-
-  const div = document.createElement("div");
-  div.className = "message " + type;
-  div.textContent = text;
-
-  if (image) {
-    const img = document.createElement("img");
-    img.src = image;
-    img.alt = "Uploaded image";
-    div.appendChild(img);
-  }
-
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-
-  return div;
-}
-
-function selectImage(event) {
-  const file = event.target.files[0];
-
-  if (!file) return;
-
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    alert("Please select a JPG, PNG, or WEBP image.");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert("Image must be smaller than 5 MB.");
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.onload = () => {
-    selectedImage = reader.result;
-    preview.src = selectedImage;
-    preview.style.display = "block";
-  };
-
-  reader.readAsDataURL(file);
-}
-
-async function sendMessage() {
-  const text = promptBox.value.trim();
-
-  if ((!text && !selectedImage) || busy) return;
-
-  const image = selectedImage;
-
-  addMessage(text || "What is in this picture?", "user", image);
-
-  messages.push({
-    role: "user",
-    content: text || "Please describe this image."
-  });
-
-  promptBox.value = "";
-  selectedImage = null;
-  preview.style.display = "none";
-  fileBox.value = "";
-
-  busy = true;
-
-  const loading = addMessage("Thinking...", "ai");
-
-  try {
-    const response = await fetch(API_URL + "/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        messages: messages,
-        image: image
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error("AI connection failed");
-    }
-
-    loading.textContent = data.reply;
-
-    messages.push({
-      role: "assistant",
-      content: data.reply
-    });
-
-  } catch (error) {
-    loading.textContent =
-      "I couldn't connect to the AI yet. The backend still needs to be connected.";
-  }
-
-  busy = false;
-  chat.scrollTop = chat.scrollHeight;
-}
-
-function newChat() {
-  messages = [];
-  selectedImage = null;
-  fileBox.value = "";
-  preview.style.display = "none";
-  promptBox.value = "";
-
-  chat.innerHTML = `
-    <div class="welcome" id="welcome">
-      <h1>How can I help you?</h1>
-      <p>Ask me anything or upload a picture.</p>
-    </div>
-  `;
-}
-
-promptBox.addEventListener("keydown", event => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    sendMessage();
-  }
+return `%%CODE${index}%%`;
 });
-</script>
+safe = safe.replace(/([^]+)`/g, "$1");
+safe = safe.replace(/**(.?)**/g, "$1");
+safe = safe.replace(/*(.?)*/g, "$1");
+const paragraphs = safe.split(/\n\n+/).map(p => {
+if (p.startsWith("%%CODE")) return p;
+if (/^[-] /.test(p)) {
+return "" + p.split("\n").map(line =>
+"" + line.replace(/^[-] /,"") + ""
+).join("") + "";
+}
+if (/^\d+. /.test(p)) {
+return "" + p.split("\n").map(line =>
+"" + line.replace(/^\d+. /,"") + ""
+).join("") + "";
+}
+return "" + p.replace(/\n/g,"") + "";
+}).join("");
+return paragraphs.replace(/%%CODE(\d+)%%/g, (_,i) => blocks[Number(i)]);
+}
+function render() {
+renderSidebar();
+messagesBox.innerHTML = "";
+const chat = currentChat();
+const hasMessages = chat && chat.messages.length > 0;
+welcome.style.display = hasMessages ? "none" : "block";
+if (chat) {
+chat.messages.forEach((message,index) => {
+addMessageToScreen(message,index,false);
+});
+}
+chatBox.scrollTop = chatBox.scrollHeight;
+}
+function addMessageToScreen(message,index,scroll=true) {
+const wrapper = document.createElement("div");
+wrapper.className = "message " + (message.role === "user" ? "user" : "ai");
+const bubble = document.createElement("div");
+bubble.className = "bubble";
+if (message.role === "user") {
+bubble.textContent = message.content || "";
+if (message.image) {
+const img = document.createElement("img");
+img.src = message.image;
+img.alt = "Uploaded image";
+bubble.appendChild(img);
+}
+} else {
+bubble.innerHTML = formatText(message.content || "");
+}
+wrapper.appendChild(bubble);
+if (message.role === "assistant") {
+const tools = document.createElement("div");
+tools.className = "message-tools";
+const copy = document.createElement("button");
+copy.textContent = "Copy";
+copy.onclick = () => {
+navigator.clipboard?.writeText(message.content || "")
+.then(() => toast("Copied"))
+.catch(() => toast("Couldn't copy this message"));
+};
+tools.appendChild(copy);
+wrapper.appendChild(tools);
+}
+messagesBox.appendChild(wrapper);
+if (scroll) chatBox.scrollTop = chatBox.scrollHeight;
+}
+function addTyping() {
+const wrapper = document.createElement("div");
+wrapper.className = "message ai";
+wrapper.id = "typingIndicator";
+wrapper.innerHTML = '';
+messagesBox.appendChild(wrapper);
+chatBox.scrollTop = chatBox.scrollHeight;
+}
+function removeTyping() {
+document.getElementById("typingIndicator")?.remove();
+}
+function makeTitle(text) {
+const clean = text.trim().replace(/\s+/g," ");
+return clean.length > 34 ? clean.slice(0,34) + "..." : clean || "New chat";
+}
+async function sendMessage(textOverride) {
+if (busy) return;
+const text = (textOverride ?? input.value).trim();
+if (!text && !selectedImage) return;
+if (!currentChat()) newChat();
+const chat = currentChat();
+if (!chat) return;
+const imageForMessage = selectedImage;
+const userMessage = {
+role:"user",
+content:text || "What is in this image?",
+...(imageForMessage ? {image:imageForMessage} : {})
+};
+if (chat.messages.length === 0) {
+chat.title = makeTitle(userMessage.content);
+}
+chat.messages.push(userMessage);
+chat.updated = Date.now();
+selectedImage = null;
+imagePreview.style.display = "none";
+previewImage.src = "";
+input.value = "";
+resizeInput();
+saveChats();
+render();
+busy = true;
+sendButton.disabled = true;
+addTyping();
+try {
+// Do not resend old image data in the conversation history.
+const history = chat.messages.map(m => ({
+role:m.role,
+content:m.content
+}));
+const response = await fetch(API_URL, {
+  method:"POST",
+  headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({
+    messages:history,
+    image:imageForMessage
+  })
+});
 
-</body>
-</html>
+const data = await response.json().catch(() => ({}));
+removeTyping();
+
+if (!response.ok) {
+  throw new Error(data.error || "The AI could not answer. Please try again.");
+}
+
+if (!data.reply) {
+  throw new Error("The AI returned an empty response.");
+}
+
+chat.messages.push({
+  role:"assistant",
+  content:data.reply
+});
+chat.updated = Date.now();
+saveChats();
+render();
+
+} catch (error) {
+removeTyping();
+chat.messages.push({
+role:"assistant",
+content:"I couldn't get a response from the AI.\n\n" + error.message
+});
+saveChats();
+render();
+} finally {
+busy = false;
+sendButton.disabled = false;
+input.focus();
+}
+}
+function resizeInput() {
+input.style.height = "auto";
+input.style.height = Math.min(input.scrollHeight,150) + "px";
+}
+document.getElementById("newChat").onclick = newChat;
+sendButton.onclick = () => sendMessage();
+input.addEventListener("input",resizeInput);
+input.addEventListener("keydown",e => {
+if (e.key === "Enter" && !e.shiftKey) {
+e.preventDefault();
+sendMessage();
+}
+});
+document.querySelectorAll(".prompt").forEach(button => {
+button.onclick = () => sendMessage(button.dataset.prompt);
+});
+document.getElementById("uploadButton").onclick = () => imageInput.click();
+imageInput.onchange = async () => {
+const file = imageInput.files?.[0];
+if (!file) return;
+if (!["image/jpeg","image/png","image/webp"].includes(file.type)) {
+toast("Choose a JPG, PNG, or WEBP image.");
+imageInput.value = "";
+return;
+}
+if (file.size > 5 * 1024 * 1024) {
+toast("Please choose an image smaller than 5 MB.");
+imageInput.value = "";
+return;
+}
+try {
+selectedImage = await compressImage(file);
+previewImage.src = selectedImage;
+imagePreview.style.display = "block";
+} catch {
+toast("Couldn't load that image.");
+}
+imageInput.value = "";
+};
+function compressImage(file) {
+return new Promise((resolve,reject) => {
+const reader = new FileReader();
+reader.onerror = reject;
+reader.onload = () => {
+const img = new Image();
+img.onerror = reject;
+img.onload = () => {
+const scale = Math.min(1,1200 / Math.max(img.width,img.height));
+const canvas = document.createElement("canvas");
+canvas.width = Math.round(img.width * scale);
+canvas.height = Math.round(img.height * scale);
+canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+resolve(canvas.toDataURL("image/jpeg",0.78));
+};
+img.src = reader.result;
+};
+reader.readAsDataURL(file);
+});
+}
+document.getElementById("removeImage").onclick = () => {
+selectedImage = null;
+previewImage.src = "";
+imagePreview.style.display = "none";
+};
+function applyTheme(theme) {
+document.body.classList.toggle("light",theme === "light");
+localStorage.setItem(THEME_KEY,theme);
+document.getElementById("themeSelect").value = theme;
+}
+applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+document.getElementById("themeButton").onclick = () => {
+applyTheme(document.body.classList.contains("light") ? "dark" : "light");
+};
+document.getElementById("themeSelect").onchange = e => applyTheme(e.target.value);
+document.getElementById("fontSelect").value = localStorage.getItem(FONT_KEY) || "15";
+function applyFont(size) {
+document.querySelectorAll(".bubble").forEach(b => b.style.fontSize = size + "px");
+localStorage.setItem(FONT_KEY,size);
+}
+applyFont(document.getElementById("fontSelect").value);
+document.getElementById("fontSelect").onchange = e => applyFont(e.target.value);
+const settingsPanel = document.getElementById("settingsPanel");
+document.getElementById("settingsButton").onclick = () => settingsPanel.style.display = "flex";
+document.getElementById("closeSettings").onclick =
+document.getElementById("doneSettings").onclick = () => settingsPanel.style.display = "none";
+settingsPanel.onclick = e => {
+if (e.target === settingsPanel) settingsPanel.style.display = "none";
+};
+document.getElementById("clearButton").onclick = () => {
+if (!chats.length) return toast("There are no saved chats.");
+if (!confirm("Delete all saved conversations? This cannot be undone.")) return;
+chats = [];
+currentChatId = null;
+saveChats();
+render();
+toast("All chats deleted");
+};
+document.getElementById("menuButton").onclick = () => {
+document.getElementById("sidebar").classList.toggle("open");
+document.getElementById("mobileShade").classList.toggle("show");
+};
+function closeMobileMenu() {
+document.getElementById("sidebar").classList.remove("open");
+document.getElementById("mobileShade").classList.remove("show");
+}
+document.getElementById("mobileShade").onclick = closeMobileMenu;
+// Browser voice input, where supported
+const voiceButton = document.getElementById("voiceButton");
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+recognition = new SpeechRecognition();
+recognition.lang = "en-US";
+recognition.interimResults = false;
+recognition.onresult = event => {
+const spoken = event.results[0][0].transcript;
+input.value += (input.value ? " " : "") + spoken;
+resizeInput();
+};
+recognition.onerror = () => toast("Voice input couldn't start.");
+voiceButton.onclick = () => {
+try {
+recognition.start();
+toast("Listening...");
+} catch {
+toast("Voice input is already running.");
+}
+};
+} else {
+voiceButton.onclick = () => toast("Voice input isn't supported in this browser.");
+}
+if (chats.length) {
+currentChatId = chats[0].id;
+}
+render();
